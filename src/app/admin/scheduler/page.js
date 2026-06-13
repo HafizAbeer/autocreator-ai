@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Loader2, Rocket, CheckCircle2, AlertCircle,
-  FileText, Video, Hash, MessageSquare, Send, RefreshCw, Upload
+  FileText, Video, Hash, MessageSquare, Send, RefreshCw, Upload, Download, Copy
 } from "lucide-react";
 
 const PIPELINE_STEPS = [
@@ -37,9 +37,6 @@ export default function SchedulerPage() {
     niche: "General",
     targetAudience: "Everyone",
     videoDuration: "60",
-    platforms: ["tiktok"],
-    postNow: true,
-    scheduledFor: "",
   });
 
   // Pipeline state
@@ -66,10 +63,6 @@ export default function SchedulerPage() {
   async function handleLaunch() {
     if (!form.topic.trim()) {
       setFormError("Please enter a topic.");
-      return;
-    }
-    if (form.platforms.length === 0) {
-      setFormError("Select at least one platform.");
       return;
     }
     setFormError("");
@@ -221,61 +214,7 @@ export default function SchedulerPage() {
                   />
                 </div>
 
-                <div className="space-y-2">
-                  <Label>Platforms *</Label>
-                  <div className="flex gap-3">
-                    {[
-                      { id: "tiktok", label: "🎵 TikTok" },
-                      { id: "instagram", label: "📸 Instagram" },
-                      { id: "facebook", label: "📘 Facebook" },
-                    ].map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => handlePlatformToggle(p.id)}
-                        className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all ${
-                          form.platforms.includes(p.id)
-                            ? "border-primary bg-primary/10 text-primary"
-                            : "border-border text-muted-foreground hover:border-primary/50"
-                        }`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>When to Post</Label>
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setForm((p) => ({ ...p, postNow: true }))}
-                      className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all ${
-                        form.postNow ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
-                      }`}
-                    >
-                      Post Now
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setForm((p) => ({ ...p, postNow: false }))}
-                      className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-all ${
-                        !form.postNow ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground"
-                      }`}
-                    >
-                      Schedule
-                    </button>
-                  </div>
-                  {!form.postNow && (
-                    <Input
-                      type="datetime-local"
-                      value={form.scheduledFor}
-                      onChange={(e) => setForm((p) => ({ ...p, scheduledFor: e.target.value }))}
-                      className="mt-2"
-                    />
-                  )}
-                </div>
+                {/* Removed Platforms and Scheduling blocks */}
 
                 {formError && (
                   <p className="text-sm text-red-500 flex items-center gap-2">
@@ -399,58 +338,46 @@ export default function SchedulerPage() {
                             <div className={`text-xs px-3 py-1.5 rounded-full border font-medium whitespace-nowrap ${STATUS_COLORS[job.pipelineStatus] || ""}`}>
                               {job.pipelineStatus?.replace(/_/g, " ")}
                             </div>
-                            {job.pipelineStatus === "ready" && (
-                              <Button
-                                size="sm"
-                                onClick={() => publishJob(job._id)}
-                                disabled={isPublishing}
-                                className="gap-1.5 whitespace-nowrap"
-                              >
-                                {isPublishing ? (
-                                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Publishing...</>
-                                ) : (
-                                  <><Upload className="h-3.5 w-3.5" /> Publish Now</>
-                                )}
-                              </Button>
-                            )}
                           </div>
                         </div>
 
-                        {/* Per-platform status breakdown */}
-                        {job.platforms?.length > 0 && (
-                          <div className="flex gap-2 flex-wrap">
-                            {job.platforms.map((p) => (
-                              <span
-                                key={p.platform}
-                                className={`text-xs px-2 py-1 rounded-md border font-medium capitalize ${
-                                  p.status === "published" ? "bg-green-500/10 text-green-500 border-green-500/30" :
-                                  p.status === "failed" ? "bg-red-500/10 text-red-500 border-red-500/30" :
-                                  p.status === "processing" ? "bg-blue-400/10 text-blue-400 border-blue-400/30" :
-                                  "bg-muted text-muted-foreground border-border"
-                                }`}
-                              >
-                                {p.platform}: {p.status}
-                              </span>
-                            ))}
+                        {/* Download & Copy Section */}
+                        {job.pipelineStatus === "ready" && job.finalVideoUrl && (
+                          <div className="mt-4 p-4 rounded-lg bg-muted/20 border space-y-4">
+                            <div className="flex justify-between items-center">
+                              <h4 className="text-sm font-semibold">Generated Content</h4>
+                              <a href={job.finalVideoUrl} download>
+                                <Button size="sm" variant="outline">
+                                  <Download className="h-4 w-4 mr-2" /> Download Video
+                                </Button>
+                              </a>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <div className="flex justify-between items-center">
+                                <Label className="text-xs text-muted-foreground">Caption & Hashtags</Label>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost" 
+                                  className="h-6 px-2 text-xs"
+                                  onClick={() => {
+                                    const text = `${job.generatedCaption}\n\n${job.generatedHashtags?.join(" ")}`;
+                                    navigator.clipboard.writeText(text);
+                                  }}
+                                >
+                                  <Copy className="h-3 w-3 mr-1" /> Copy Text
+                                </Button>
+                              </div>
+                              <div className="text-xs p-3 rounded bg-background border text-muted-foreground whitespace-pre-wrap">
+                                {job.generatedCaption}
+                                {"\n\n"}
+                                {job.generatedHashtags?.join(" ")}
+                              </div>
+                            </div>
                           </div>
                         )}
 
-                        {/* Publish result feedback */}
-                        {pubResult && (
-                          <div className={`text-xs p-2 rounded-lg ${
-                            pubResult.error ? "bg-red-500/10 text-red-500" : "bg-green-500/10 text-green-500"
-                          }`}>
-                            {pubResult.error ? (
-                              `❌ ${pubResult.error}`
-                            ) : (
-                              pubResult.results?.map((r) =>
-                                r.success
-                                  ? `✅ ${r.platform}: Published (ID: ${r.postId})`
-                                  : `❌ ${r.platform}: ${r.error}`
-                              ).join(" | ")
-                            )}
-                          </div>
-                        )}
+                        {/* Publish results removed */}
                       </div>
                     );
                   })}

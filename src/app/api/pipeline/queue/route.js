@@ -16,7 +16,7 @@ export async function GET() {
     const jobs = await Post.find({})
       .sort({ createdAt: -1 })
       .limit(20)
-      .select("topic niche platforms pipelineStatus pipelineStep scheduledFor createdAt")
+      .select("topic niche platforms pipelineStatus pipelineStep scheduledFor createdAt generatedCaption generatedHashtags finalVideoUrl")
       .lean();
 
     return NextResponse.json({ jobs });

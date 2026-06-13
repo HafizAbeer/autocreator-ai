@@ -12,6 +12,7 @@ const postSchema = new mongoose.Schema({
   generatedHashtags: [String],
   thumbnailUrl: String,
   videoScenes: [mongoose.Schema.Types.Mixed], // scenes array from generate-video
+  finalVideoUrl: String,
 
   // Pipeline tracking
   pipelineStatus: {
@@ -21,37 +22,14 @@ const postSchema = new mongoose.Schema({
       "generating_script",
       "generating_media",
       "generating_video",
+      "stitching_video",
       "ready",
-      "publishing",
-      "published",
       "failed",
     ],
     default: "queued",
   },
   pipelineStep: { type: Number, default: 0 }, // 0-5 for progress bar
   pipelineError: String,
-
-  // Scheduling
-  scheduledFor: Date,
-  postNow: { type: Boolean, default: false },
-
-  // Per-platform publishing
-  platforms: [
-    {
-      platform: {
-        type: String,
-        enum: ["tiktok", "instagram", "facebook"],
-      },
-      status: {
-        type: String,
-        enum: ["pending", "scheduled", "processing", "published", "failed"],
-        default: "pending",
-      },
-      publishedAt: Date,
-      errorLog: String,
-      postId: String, // platform's returned post ID
-    },
-  ],
 
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },

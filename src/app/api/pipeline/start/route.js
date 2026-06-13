@@ -5,7 +5,7 @@ import dbConnect from "@/lib/mongodb";
 import { Post } from "@/models/Post";
 import { aiService } from "@/services/ai";
 import { createClient } from "pexels";
-
+import { videoService } from "@/services/video";
 // Helper: update pipeline status in DB
 async function updateJob(jobId, fields) {
   await Post.findByIdAndUpdate(jobId, { $set: fields });
@@ -23,10 +23,10 @@ export async function POST(req) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { topic, niche, targetAudience, videoDuration, platforms, scheduledFor, postNow } = await req.json();
+    const { topic, niche, targetAudience, videoDuration } = await req.json();
 
-    if (!topic || !platforms || platforms.length === 0) {
-      return NextResponse.json({ error: "Topic and at least one platform are required." }, { status: 400 });
+    if (!topic) {
+      return NextResponse.json({ error: "Topic is required." }, { status: 400 });
     }
 
     await dbConnect();
@@ -37,9 +37,6 @@ export async function POST(req) {
       niche: niche || "General",
       targetAudience: targetAudience || "Everyone",
       videoDuration: videoDuration || "60",
-      platforms: platforms.map((p) => ({ platform: p, status: "pending" })),
-      scheduledFor: scheduledFor ? new Date(scheduledFor) : null,
-      postNow: postNow || false,
       pipelineStatus: "queued",
       pipelineStep: 0,
     });
@@ -47,7 +44,7 @@ export async function POST(req) {
     const jobId = job._id.toString();
 
     // Return job ID immediately — pipeline runs in background (fire-and-forget)
-    runPipeline(jobId, { topic, niche, targetAudience, videoDuration, platforms }).catch(
+    runPipeline(jobId, { topic, niche, targetAudience, videoDuration }).catch(
       async (err) => {
         await updateJob(jobId, {
           pipelineStatus: "failed",
@@ -62,7 +59,7 @@ export async function POST(req) {
   }
 }
 
-async function runPipeline(jobId, { topic, niche, targetAudience, videoDuration, platforms }) {
+async function runPipeline(jobId, { topic, niche, targetAudience, videoDuration }) {
   // ── STEP 1: Generate Script ─────────────────────────────────────
   await updateJob(jobId, { pipelineStatus: "generating_script", pipelineStep: 1 });
 
@@ -159,8 +156,16 @@ Return ONLY a valid JSON array. No markdown, no extra text. Format:
 
   await updateJob(jobId, { videoScenes, pipelineStep: 5 });
 
-  // ── STEP 4: Mark as Ready ────────────────────────────────────────
-  await updateJob(jobId, { pipelineStatus: "ready", pipelineStep: 5 });
+  // ── STEP 4: Stitch Video ────────────────────────────────────────
+  await updateJob(jobId, { pipelineStatus: "stitching_video", pipelineStep: 4 });
+
+  try {
+    const finalVideoUrl = await videoService.stitchVideo(jobId, videoScenes);
+    await updateJob(jobId, { pipelineStatus: "ready", pipelineStep: 5, finalVideoUrl });
+  } catch (err) {
+    console.error("Video Stitching Failed:", err);
+    await updateJob(jobId, { pipelineStatus: "failed", pipelineError: "Video Stitching Failed: " + err.message, pipelineStep: 5 });
+  }
 
   // NOTE: Actual social media posting will be triggered separately
   // once the user reviews the content or if postNow=true and tokens exist.
