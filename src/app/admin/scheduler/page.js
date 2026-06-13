@@ -7,8 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Loader2, Rocket, CheckCircle2, Clock, AlertCircle,
-  FileText, Video, Hash, MessageSquare, Send, RefreshCw
+  Loader2, Rocket, CheckCircle2, AlertCircle,
+  FileText, Video, Hash, MessageSquare, Send, RefreshCw, Upload
 } from "lucide-react";
 
 const PIPELINE_STEPS = [
@@ -51,6 +51,8 @@ export default function SchedulerPage() {
   // Queue state
   const [queue, setQueue] = useState([]);
   const [queueLoading, setQueueLoading] = useState(false);
+  const [publishingJobId, setPublishingJobId] = useState(null);
+  const [publishResults, setPublishResults] = useState({}); // { jobId: { results, error } }
 
   function handlePlatformToggle(p) {
     setForm((prev) => ({
@@ -120,6 +122,25 @@ export default function SchedulerPage() {
       // ignore
     } finally {
       setQueueLoading(false);
+    }
+  }
+
+  async function publishJob(jobId) {
+    setPublishingJobId(jobId);
+    setPublishResults((prev) => ({ ...prev, [jobId]: null }));
+    try {
+      const res = await fetch("/api/pipeline/publish", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jobId }),
+      });
+      const data = await res.json();
+      setPublishResults((prev) => ({ ...prev, [jobId]: data }));
+      fetchQueue(); // refresh queue to show updated status
+    } catch (err) {
+      setPublishResults((prev) => ({ ...prev, [jobId]: { error: err.message } }));
+    } finally {
+      setPublishingJobId(null);
     }
   }
 
@@ -362,19 +383,77 @@ export default function SchedulerPage() {
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {queue.map((job) => (
-                    <div key={job._id} className="flex items-center justify-between p-4 border rounded-xl hover:bg-muted/10 transition-colors">
-                      <div className="space-y-1 min-w-0 flex-1">
-                        <p className="font-medium text-sm truncate">{job.topic}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {job.platforms?.map((p) => p.platform).join(", ")} &bull; {formatDate(job.createdAt)}
-                        </p>
+                  {queue.map((job) => {
+                    const isPublishing = publishingJobId === job._id;
+                    const pubResult = publishResults[job._id];
+                    return (
+                      <div key={job._id} className="border rounded-xl p-4 hover:bg-muted/10 transition-colors space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <p className="font-medium text-sm truncate">{job.topic}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {job.platforms?.map((p) => p.platform).join(", ")} &bull; {formatDate(job.createdAt)}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-2 ml-4">
+                            <div className={`text-xs px-3 py-1.5 rounded-full border font-medium whitespace-nowrap ${STATUS_COLORS[job.pipelineStatus] || ""}`}>
+                              {job.pipelineStatus?.replace(/_/g, " ")}
+                            </div>
+                            {job.pipelineStatus === "ready" && (
+                              <Button
+                                size="sm"
+                                onClick={() => publishJob(job._id)}
+                                disabled={isPublishing}
+                                className="gap-1.5 whitespace-nowrap"
+                              >
+                                {isPublishing ? (
+                                  <><Loader2 className="h-3.5 w-3.5 animate-spin" /> Publishing...</>
+                                ) : (
+                                  <><Upload className="h-3.5 w-3.5" /> Publish Now</>
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Per-platform status breakdown */}
+                        {job.platforms?.length > 0 && (
+                          <div className="flex gap-2 flex-wrap">
+                            {job.platforms.map((p) => (
+                              <span
+                                key={p.platform}
+                                className={`text-xs px-2 py-1 rounded-md border font-medium capitalize ${
+                                  p.status === "published" ? "bg-green-500/10 text-green-500 border-green-500/30" :
+                                  p.status === "failed" ? "bg-red-500/10 text-red-500 border-red-500/30" :
+                                  p.status === "processing" ? "bg-blue-400/10 text-blue-400 border-blue-400/30" :
+                                  "bg-muted text-muted-foreground border-border"
+                                }`}
+                              >
+                                {p.platform}: {p.status}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Publish result feedback */}
+                        {pubResult && (
+                          <div className={`text-xs p-2 rounded-lg ${
+                            pubResult.error ? "bg-red-500/10 text-red-500" : "bg-green-500/10 text-green-500"
+                          }`}>
+                            {pubResult.error ? (
+                              `❌ ${pubResult.error}`
+                            ) : (
+                              pubResult.results?.map((r) =>
+                                r.success
+                                  ? `✅ ${r.platform}: Published (ID: ${r.postId})`
+                                  : `❌ ${r.platform}: ${r.error}`
+                              ).join(" | ")
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <div className={`ml-4 text-xs px-3 py-1.5 rounded-full border font-medium whitespace-nowrap ${STATUS_COLORS[job.pipelineStatus] || ""}`}>
-                        {job.pipelineStatus?.replace(/_/g, " ")}
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

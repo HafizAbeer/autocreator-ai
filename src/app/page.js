@@ -44,9 +44,21 @@ export default function Home() {
             />
             <FeatureCard 
               icon={<Video className="h-10 w-10 text-rose-500" />}
-              title="Faceless Video Generator"
-              description="Turn scripts or prompts into ready-to-post vertical videos with auto-captions and voiceovers."
+              title="TikTok Video Generator"
+              description="Turn scripts or prompts into ready-to-post TikTok vertical videos with auto-captions and voiceovers."
               href="/tiktok-video-generator"
+            />
+            <FeatureCard 
+              icon={<Video className="h-10 w-10 text-pink-500" />}
+              title="Instagram Reel Generator"
+              description="Create highly engaging Instagram Reels with AI. Convert any topic into a ready-to-post vertical video."
+              href="/instagram-reel-generator"
+            />
+            <FeatureCard 
+              icon={<Video className="h-10 w-10 text-blue-600" />}
+              title="Facebook Video Generator"
+              description="Generate engaging Facebook videos with captions and AI voiceovers automatically for viral reach."
+              href="/facebook-video-generator"
             />
             <FeatureCard 
               icon={<ImageIcon className="h-10 w-10 text-emerald-500" />}
