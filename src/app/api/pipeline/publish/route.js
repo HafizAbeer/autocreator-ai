@@ -113,10 +113,10 @@ export async function POST(req) {
       platformUpdates.push(job.platforms[platformIdx]);
     }
 
-    // Determine overall status
-    const allPublished = job.platforms.every((p) => p.status === "published");
+    // Determine overall status — keep "ready" if any platform failed (allows retry)
+    const anyPublished = job.platforms.some((p) => p.status === "published");
     const allFailed = job.platforms.every((p) => p.status === "failed");
-    job.pipelineStatus = allPublished ? "published" : allFailed ? "failed" : "published";
+    job.pipelineStatus = anyPublished ? "published" : allFailed ? "ready" : "published";
     await job.save();
 
     return NextResponse.json({

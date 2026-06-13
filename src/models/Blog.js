@@ -43,9 +43,8 @@ const blogSchema = new mongoose.Schema({
   },
 });
 
-blogSchema.pre("save", function (next) {
+blogSchema.pre("save", async function () {
   this.updatedAt = Date.now();
-  next();
 });
 
 export const Blog = mongoose.models.Blog || mongoose.model("Blog", blogSchema);
