@@ -7,6 +7,118 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Download, PlayCircle, Settings, RefreshCw } from "lucide-react";
 
+// ─── Canvas Video Recorder ─────────────────────────────────────────────────────
+async function recordVideoFromScenes(scenes, onProgress) {
+  const canvas = document.createElement("canvas");
+  canvas.width = 720;
+  canvas.height = 1280;
+  const ctx = canvas.getContext("2d");
+
+  const stream = canvas.captureStream(30);
+  const recorder = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp9" });
+  const chunks = [];
+  recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+  const recordingDone = new Promise((resolve) => {
+    recorder.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }));
+  });
+
+  recorder.start();
+
+  for (let i = 0; i < scenes.length; i++) {
+    const scene = scenes[i];
+    const duration = (scene.duration || 5) * 1000;
+    onProgress && onProgress(Math.round(((i) / scenes.length) * 90));
+
+    // Load background video frame
+    let videoEl = null;
+    if (scene.videoUrl) {
+      videoEl = document.createElement("video");
+      videoEl.src = `/api/video-proxy?url=${encodeURIComponent(scene.videoUrl)}`;
+      videoEl.crossOrigin = "anonymous";
+      videoEl.muted = true;
+      videoEl.loop = true;
+      await new Promise((res) => {
+        videoEl.oncanplay = res;
+        videoEl.onerror = res;
+        videoEl.load();
+      });
+      videoEl.play().catch(() => {});
+    }
+
+    const start = performance.now();
+    let animFrame;
+
+    await new Promise((resolve) => {
+      const draw = () => {
+        const elapsed = performance.now() - start;
+        if (elapsed >= duration) {
+          resolve();
+          return;
+        }
+
+        // Background
+        if (videoEl && videoEl.readyState >= 2) {
+          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        } else {
+          ctx.fillStyle = "#111";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // Dark overlay
+        const grad = ctx.createLinearGradient(0, canvas.height * 0.5, 0, canvas.height);
+        grad.addColorStop(0, "rgba(0,0,0,0)");
+        grad.addColorStop(1, "rgba(0,0,0,0.85)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Caption text
+        ctx.fillStyle = "white";
+        ctx.font = "bold 44px Arial";
+        ctx.textAlign = "center";
+        ctx.shadowColor = "black";
+        ctx.shadowBlur = 8;
+        const words = scene.text.split(" ");
+        const lines = [];
+        let line = "";
+        for (const word of words) {
+          const test = line ? `${line} ${word}` : word;
+          if (ctx.measureText(test).width > canvas.width - 80) {
+            lines.push(line);
+            line = word;
+          } else {
+            line = test;
+          }
+        }
+        lines.push(line);
+        const lineHeight = 56;
+        const totalH = lines.length * lineHeight;
+        const startY = canvas.height - 160 - totalH / 2;
+        lines.forEach((l, li) => {
+          ctx.fillText(l, canvas.width / 2, startY + li * lineHeight);
+        });
+
+        // Progress bar
+        const progress = elapsed / duration;
+        ctx.fillStyle = "rgba(255,255,255,0.15)";
+        ctx.fillRect(0, canvas.height - 8, canvas.width, 8);
+        ctx.fillStyle = "#6366f1";
+        ctx.fillRect(0, canvas.height - 8, canvas.width * progress, 8);
+
+        animFrame = requestAnimationFrame(draw);
+      };
+      animFrame = requestAnimationFrame(draw);
+    });
+
+    cancelAnimationFrame(animFrame);
+    if (videoEl) videoEl.pause();
+  }
+
+  recorder.stop();
+  onProgress && onProgress(100);
+  return recordingDone;
+}
+
 // ─── Scene Player ─────────────────────────────────────────────────────────────
 function ScenePlayer({ scenes }) {
   const videoRef = useRef(null);
@@ -120,17 +232,7 @@ function ScenePlayer({ scenes }) {
         <Button variant="outline" size="sm" onClick={restart} className="gap-2">
           <RefreshCw className="h-4 w-4" /> Replay
         </Button>
-        <Button
-          size="sm"
-          className="gap-2"
-          onClick={() =>
-            alert(
-              "Video Download:\nTo save this video, use a screen recorder (e.g. OBS or Windows Game Bar [Win+G]) while it plays. Full canvas-based export will be added in a future update!"
-            )
-          }
-        >
-          <Download className="h-4 w-4" /> Download
-        </Button>
+        <DownloadButton scenes={scenes} />
       </div>
 
       {/* Scene list */}
@@ -149,6 +251,59 @@ function ScenePlayer({ scenes }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ─── Download Button with Progress ────────────────────────────────────────────
+function DownloadButton({ scenes }) {
+  const [downloading, setDownloading] = useState(false);
+  const [dlProgress, setDlProgress] = useState(0);
+  const [dlError, setDlError] = useState("");
+
+  async function handleDownload() {
+    setDownloading(true);
+    setDlProgress(0);
+    setDlError("");
+    try {
+      const blob = await recordVideoFromScenes(scenes, setDlProgress);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `autocreator-video-${Date.now()}.webm`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setDlError("Download failed: " + err.message);
+    } finally {
+      setDownloading(false);
+      setDlProgress(0);
+    }
+  }
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <Button
+        size="sm"
+        className="gap-2"
+        onClick={handleDownload}
+        disabled={downloading}
+      >
+        {downloading ? (
+          <><Loader2 className="h-4 w-4 animate-spin" /> {dlProgress}%</>
+        ) : (
+          <><Download className="h-4 w-4" /> Download</>
+        )}
+      </Button>
+      {downloading && (
+        <div className="w-full bg-muted rounded-full h-1 mt-1 overflow-hidden">
+          <div
+            className="bg-primary h-full transition-all duration-300"
+            style={{ width: `${dlProgress}%` }}
+          />
+        </div>
+      )}
+      {dlError && <p className="text-xs text-red-500 mt-1">{dlError}</p>}
     </div>
   );
 }
