@@ -30,11 +30,10 @@ export const metadata = {
 };
 
 export default async function BlogListingPage() {
-  await dbConnect();
-  
   // Fetch from DB, fallback to mock if empty
   let posts = [];
   try {
+    await dbConnect();
     const dbPosts = await Blog.find({ isPublished: true }).sort({ createdAt: -1 }).lean();
     posts = dbPosts.length > 0 ? dbPosts : mockPosts;
   } catch (error) {

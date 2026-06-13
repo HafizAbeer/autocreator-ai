@@ -1,43 +1,60 @@
 import mongoose from "mongoose";
 
 const postSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: true,
-  },
-  topic: String,
-  script: String,
-  caption: String,
-  hashtags: [String],
-  mediaUrl: String, // Path to generated video or thumbnail
-  type: {
+  topic: { type: String, required: true },
+  niche: String,
+  targetAudience: String,
+  videoDuration: { type: String, default: "60" },
+
+  // Generated content
+  generatedScript: String,
+  generatedCaption: String,
+  generatedHashtags: [String],
+  thumbnailUrl: String,
+  videoScenes: [mongoose.Schema.Types.Mixed], // scenes array from generate-video
+
+  // Pipeline tracking
+  pipelineStatus: {
     type: String,
-    enum: ["video", "thumbnail"],
-    default: "video",
+    enum: [
+      "queued",
+      "generating_script",
+      "generating_media",
+      "generating_video",
+      "ready",
+      "publishing",
+      "published",
+      "failed",
+    ],
+    default: "queued",
   },
-  platforms: [{
-    platform: {
-      type: String,
-      enum: ["tiktok", "instagram", "facebook"],
+  pipelineStep: { type: Number, default: 0 }, // 0-5 for progress bar
+  pipelineError: String,
+
+  // Scheduling
+  scheduledFor: Date,
+  postNow: { type: Boolean, default: false },
+
+  // Per-platform publishing
+  platforms: [
+    {
+      platform: {
+        type: String,
+        enum: ["tiktok", "instagram", "facebook"],
+      },
+      status: {
+        type: String,
+        enum: ["pending", "scheduled", "processing", "published", "failed"],
+        default: "pending",
+      },
+      publishedAt: Date,
+      errorLog: String,
+      postId: String, // platform's returned post ID
     },
-    status: {
-      type: String,
-      enum: ["draft", "scheduled", "processing", "published", "failed"],
-      default: "draft",
-    },
-    scheduledFor: Date,
-    publishedAt: Date,
-    errorLog: String,
-  }],
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  },
+  ],
+
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: Date.now },
 });
 
 postSchema.pre("save", function (next) {

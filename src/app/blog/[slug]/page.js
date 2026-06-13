@@ -13,10 +13,9 @@ export async function generateMetadata({ params }) {
 
 export default async function BlogPostPage({ params }) {
   const { slug } = await params;
-  await dbConnect();
-  
   let post = null;
   try {
+    await dbConnect();
     post = await Blog.findOne({ slug }).lean();
   } catch(e) {
     console.error(e);
